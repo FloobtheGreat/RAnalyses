@@ -11,12 +11,12 @@ y <- as.matrix(BostonHousing[, var.y])
 
 model <- keras_model_sequential() 
 model %>% 
-  layer_dense(units = 48, activation = 'relu', input_shape = c(12)) %>% 
-  layer_dropout(rate = 0.4) %>% 
-  layer_dense(units = 24, activation = 'relu') %>%
+  layer_dense(units = 24, activation = 'relu', input_shape = c(12)) %>% 
+  #layer_dropout(rate = 0.4) %>% 
+  layer_dense(units = 48, activation = 'relu') %>%
   layer_dropout(rate = 0.4) %>% 
   layer_dense(units = 12, activation = 'relu') %>% 
-  layer_dropout(rate = 0.2) %>% 
+  #layer_dropout(rate = 0.2) %>% 
   layer_dense(units = 1)
 
 summary(model)
