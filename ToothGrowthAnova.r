@@ -16,9 +16,9 @@ TukeyHSD(fit)
 layout(matrix(c(1),1,1))
 
 library(gplots)
-plotmeans(len~dose,xlab="Dose",
+plotmeans(data$len~data$dose,xlab="Dose",
           ylab="Tooth Length", main="Mean Plot\nwith 95% CI") 
 
-plotmeans(len~supp,xlab="Supplement",
+plotmeans(data$len~data$supp,xlab="Supplement",
           ylab="Tooth Length", main="Mean Plot\nwith 95% CI") 
 
