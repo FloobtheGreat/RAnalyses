@@ -6,21 +6,23 @@ library(zoo)
 library(DomoR)
 library(hts)
 library(stringr)
+library(tidyr)
 
+start_time <- Sys.time()
 
 options(digits=9)
 
-ch <- odbcConnect("DBM_SANDBOX", believeNRows=FALSE)
+ch <- odbcConnect("NZSQL", believeNRows=FALSE)
 querytext <- paste("SELECT DT.FISCAL_YEAR_PERIOD,
-                    ST.STORE_NUMBER,
-                    PD.DEPARTMENT_MEMBER_NUMBER,
-                    PD.DEPARTMENT_NAME,
-                    PD.SUB_DEPARTMENT_MEMBER_NUMBER,
-                    PD.SUB_DEPARTMENT_NAME,
-                    PD.CLASS_MEMBER_NUMBER,
-                    PD.CLASS_NAME,
-                    PD.SUB_CLASS_MEMBER_NUMBER,
-                    PD.SUB_CLASS_NAME,
+                   ST.STORE_NUMBER,
+                   PD.DEPARTMENT_MEMBER_NUMBER,
+                   PD.DEPARTMENT_NAME,
+                   PD.SUB_DEPARTMENT_MEMBER_NUMBER,
+                   PD.SUB_DEPARTMENT_NAME,
+                   PD.CLASS_MEMBER_NUMBER,
+                   PD.CLASS_NAME,
+                   PD.SUB_CLASS_MEMBER_NUMBER,
+                   PD.SUB_CLASS_NAME,
                    SUM(SD.SALE_QUANTITY) AS UNITS
                    FROM EDW_SPOKE..FACT_BPS_SALES_HEADER SH
                    JOIN EDW_SPOKE..FACT_BPS_SALES_DETAIL SD ON SH.INBOUND_INTERACTION_KEY = SD.SH_INBOUND_INTERACTION_KEY
@@ -33,6 +35,7 @@ querytext <- paste("SELECT DT.FISCAL_YEAR_PERIOD,
                    AND DT.DATE_VALUE >= (SELECT FIRST_DAY_OF_FISCAL_PERIOD FROM EDW_SPOKE..DIM_DATE WHERE DATE_VALUE = CURRENT_DATE-'60 Months'::INTERVAL))
                    AND SD.RETURN_FLAG <> 'Y'
                    AND PD.DEPARTMENT_MEMBER_NUMBER NOT IN (875,999)
+                   AND PD.DEPARTMENT_MEMBER_NUMBER IS NOT NULL
                    AND PD.SKU_DISPOSITION_CODE IN ('A','N')
                    GROUP BY 1,2,3,4,5,6,7,8,9,10
                    ORDER BY 1,2,3,4,5,6,7,8,9,10")
@@ -43,24 +46,24 @@ res$DEPARTMENT_MEMBER_NUMBER <- str_pad(as.character(res$DEPARTMENT_MEMBER_NUMBE
 res$SUB_DEPARTMENT_MEMBER_NUMBER <- str_pad(as.character(res$SUB_DEPARTMENT_MEMBER_NUMBER), width=4, side='left', pad=c('0'))
 res$CLASS_MEMBER_NUMBER <- str_pad(as.character(res$CLASS_MEMBER_NUMBER), width=4, side='left', pad=c('0'))
 res$SUB_CLASS_MEMBER_NUMBER <- str_pad(as.character(res$SUB_CLASS_MEMBER_NUMBER), width=4, side='left', pad=c('0'))
-res$STORE_DEPT <- paste(res$STORE_NUMBER,'_', res$DEPARTMENT_DISPLAY_NUMBER, '_', res$SUB_DEPARTMENT_MEMBER_NUMBER,
-                        '_', res$CLASS_MEMBER_NUMBER, '_', res$SUB_CLASS_MEMBER_NUMBER, sep='')
+res$STORE_DEPT <- NULL
+res$STORE_DEPT <- paste(res$STORE_NUMBER, res$DEPARTMENT_MEMBER_NUMBER, res$SUB_DEPARTMENT_MEMBER_NUMBER,
+                        res$CLASS_MEMBER_NUMBER, res$SUB_CLASS_MEMBER_NUMBER, sep='_')
 
 
 FiscalPeriods <- unique(res$FISCAL_YEAR_PERIOD)
 storeNums <- unique(res$STORE_NUMBER)
 
 dt <- res
-dt$DEPARTMENT_DISPLAY_NUMBER <- NULL
+dt$DEPARTMENT_MEMBER_NUMBER <- NULL
 dt$STORE_NUMBER <- NULL
 
 dt <- dt %>% select(STORE_DEPT, FISCAL_YEAR_PERIOD, UNITS)
 
 dt2 <- arrange(dt, STORE_DEPT, FISCAL_YEAR_PERIOD)
 
-library(tidyr)
 
-widedt <- spread(data=dt,
+widedt <- spread(data=dt2,
                  key=STORE_DEPT,
                  value = UNITS)
 widedt$FISCAL_YEAR_PERIOD <- NULL
@@ -98,7 +101,7 @@ test$time <- as.array(c(0,1,2,3,4,5,6,7,8,9,10,11))
 testtidy <- gather(test,
                    'Store_Dept',
                    'Prediction',
-                   1:170683)
+                   1:171470)
 
 
 DomoR::init('basspro.domo.com', '9602905555e390fe466e9de1940bf9a4cf8e734e5678b1ef')
@@ -107,3 +110,7 @@ DomoR::init('basspro.domo.com', '9602905555e390fe466e9de1940bf9a4cf8e734e5678b1e
 
 # 3ccf75d8-b302-4126-92fa-67b0b1494f8d
 replace_ds('3ccf75d8-b302-4126-92fa-67b0b1494f8d', testtidy)
+
+end_time <- Sys.time()
+
+end_time - start_time

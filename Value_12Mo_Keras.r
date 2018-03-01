@@ -71,10 +71,11 @@ var_diagnostics(nzdata2, vars.y, vars.x)
 
 
 nzdata2 <- nzdata2[!is.na(nzdata2$DAYS_AS_CUSTOMER), ]
+nzdata2 <- nzdata2[!is.na(nzdata2$DAYS_SINCE_PURCHASE), ]
 
 ## Scale Data
 
-scaled = scale(nzdata2, center = F)
+scaled = scale(nzdata2, center = TRUE)
 
 summary(scaled)
 
@@ -138,9 +139,9 @@ vars.x <- c('SALES_R12','SALES_R24','SALES_R48','SALES_RLT',
 
 model <- keras_model_sequential()
 model %>% 
-  layer_dense(units = 68, activation = 'relu', input_shape = c(17)) %>%
-  layer_dense(units = 34, activation = 'relu') %>%
-  layer_dense(units = 17, activation = 'relu') %>%
+  layer_dense(units = 16, activation = 'relu', input_shape = c(8)) %>%
+  layer_dense(units = 32, activation = 'relu') %>%
+  layer_dense(units = 8, activation = 'relu') %>%
   layer_dense(units = 1)
   
   
@@ -149,15 +150,15 @@ model %>%
   
   model %>% compile(
     loss = 'mse',
-    optimizer = optimizer_rmsprop(lr = 0.001)
+    optimizer = optimizer_rmsprop(lr = 0.01)
   )
   
   train.x <- as.matrix(train[, vars.x])
   train.y <- as.matrix(train[, vars.y])
   
   history <- model %>% fit(x = train.x, y = train.y, 
-    epochs = 20, batch_size = 128, 
-    validation_split = 0.2,
+    epochs = 100, batch_size = 64, 
+    validation_split = 0.3,
     verbose = 1,
     shuffle = T
   )
