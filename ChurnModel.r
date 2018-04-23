@@ -1,6 +1,8 @@
 require(nza)
 require(nzr)
 require(xgboost)
+require(caTools)
+require(caret)
 
 
 
@@ -146,9 +148,11 @@ nzdata = nzQuery("SELECT HIST.*,
 
 nzDisconnect()
 
-modelData <- nzdata
-nzdata <- NULL
+#modelData <- nzdata
+#nzdata <- NULL
 
+modelData <- CHURNDATA
+CHURNDATA <- NULL
 
 modelData$LAST_NAME <- NULL
 modelData$ADDRESS_LINE_1 <- NULL
@@ -159,15 +163,18 @@ modelData$ZIP <- NULL
 
 summary(modelData)
 
-modelData$PURCH_6MO <- factor(modelData$PURCH_6MO)
+modelData$PURCH_6MO <- factor(modelData$PURCH_6MO, levels=c(0,1))
 modelData$SLS_6MO <- as.numeric(modelData$SLS_6MO)
-modelData$REWARDS <- factor(modelData$REWARDS)
-modelData$VISA <- factor(modelData$VISA)
+modelData$REWARDS <- factor( ifelse(modelData$REWARDS=='Y',1,0), levels=c(1,0) )
+modelData$VISA <- factor(ifelse(modelData$VISA=='Y', 1,0), levels=c(1,0))
 modelData$FIRST_DATE <- as.Date(modelData$FIRST_DATE)
 modelData$LAST_DATE <- as.Date(modelData$LAST_DATE)
 modelData$ORDERS_LT <- as.numeric(modelData$ORDERS_LT)
+modelData$AVG_DAYS_BTW_PURCH <- as.numeric(modelData$AVG_DAYS_BTW_PURCH)
+modelData$TIME_AS_CUSTOMER <- as.numeric(modelData$TIME_AS_CUSTOMER)
 modelData$AVG_TICKET_24MO <- as.numeric(modelData$AVG_TICKET_24MO)
 modelData$AVG_TICKET_48MO <- as.numeric(modelData$AVG_TICKET_48MO)
+modelData$AVG_TICKET_LT <- as.numeric(modelData$AVG_TICKET_LT)
 modelData$PERCENT_RETAIL_SALES <- as.numeric(modelData$PERCENT_RETAIL_SALES)
 modelData$SALES_24MO <- as.numeric(modelData$SALES_24MO)
 modelData$CORE_SALES_24MO <- as.numeric(modelData$SALES_24MO)
@@ -201,6 +208,7 @@ modelData$D500_SALES_48MO <- as.numeric(modelData$D500_SALES_48MO)
 modelData$D600_SALES_48MO <- as.numeric(modelData$D600_SALES_48MO)
 modelData$D650_SALES_48MO <- as.numeric(modelData$D650_SALES_48MO)
 modelData$D675_SALES_48MO <- as.numeric(modelData$D675_SALES_48MO)
+modelData$TARGET_RESPSONSE <- factor(modelData$TARGET_RESPSONSE, levels=c(0,1))
 
 summary(modelData)
 
@@ -208,50 +216,56 @@ table(modelData$TARGET_RESPSONSE)
 table(modelData$PURCH_6MO)
 
 noMissingTarget <- modelData[!is.na(modelData$TARGET_RESPSONSE), ]
+noMissingTarget <- NULL
 
 columnList <- as.list(colnames(noMissingTarget))
 
-vars <- c('PURCH_6MO', 'SLS_6MO', 'REWARDS', 'VISA',
+vars <- c('PURCH_6MO','REWARDS', 'VISA', 'TIME_AS_CUSTOMER',
            'ORDERS_LT', 'AVG_DAYS_BTW_PURCH', 'AVG_TICKET_LT', 'AVG_TICKET_24MO',
-          'AVG_TICKET_48MO', 'PERCENT_RETAIL_SALES', 'SALES_24MO', 'SALES_12MO', 'CORE_SALES_24MO',
+           'PERCENT_RETAIL_SALES', 'SALES_12MO', 'CORE_SALES_24MO',
           'D100_SALES_24MO', 'D151_SALES_24MO', 'D175_SALES_24MO', 'D200_SALES_24MO', 'D300_SALES_24MO',
           'D350_SALES_24MO', 'D400_SALES_24MO', 'D450_SALES_24MO', 'D475_SALES_24MO', 'D500_SALES_24MO',
-          'D600_SALES_24MO', 'D650_SALES_24MO', 'D675_SALES_24MO', 'CORE_SALES_48MO', 'D100_SALES_48MO', 
-          'D151_SALES_48MO', 'D175_SALES_48MO', 'D200_SALES_48MO', 'D300_SALES_48MO', 'D350_SALES_48MO',  
-          'D400_SALES_48MO', 'D450_SALES_48MO', 'D475_SALES_48MO', 'D500_SALES_48MO', 'D600_SALES_48MO',
-          'D650_SALES_48MO', 'D675_SALES_48MO', 'TARGET_RESPSONSE')
+          'D600_SALES_24MO', 'D650_SALES_24MO', 'D675_SALES_24MO',  'TARGET_RESPSONSE')
 
-vars.x.num <- c('SLS_6MO', 'ORDERS_LT', 'AVG_DAYS_BTW_PURCH', 'AVG_TICKET_LT', 'AVG_TICKET_24MO',
-                'AVG_TICKET_48MO', 'PERCENT_RETAIL_SALES', 'SALES_24MO', 'SALES_12MO', 'CORE_SALES_24MO',
+vars.x.num <- c('ORDERS_LT', 'AVG_DAYS_BTW_PURCH', 'AVG_TICKET_LT', 'AVG_TICKET_24MO', 'TIME_AS_CUSTOMER',
+                'PERCENT_RETAIL_SALES', 'SALES_12MO', 'CORE_SALES_24MO',
                 'D100_SALES_24MO', 'D151_SALES_24MO', 'D175_SALES_24MO', 'D200_SALES_24MO', 'D300_SALES_24MO',
                 'D350_SALES_24MO', 'D400_SALES_24MO', 'D450_SALES_24MO', 'D475_SALES_24MO', 'D500_SALES_24MO',
-                'D600_SALES_24MO', 'D650_SALES_24MO', 'D675_SALES_24MO', 'CORE_SALES_48MO', 'D100_SALES_48MO', 
-                'D151_SALES_48MO', 'D175_SALES_48MO', 'D200_SALES_48MO', 'D300_SALES_48MO', 'D350_SALES_48MO',  
-                'D400_SALES_48MO', 'D450_SALES_48MO', 'D475_SALES_48MO', 'D500_SALES_48MO', 'D600_SALES_48MO',
-                'D650_SALES_48MO', 'D675_SALES_48MO')
+                'D600_SALES_24MO', 'D650_SALES_24MO', 'D675_SALES_24MO')
 vars.x.nonum <- c('PURCH_6MO','REWARDS','VISA')
 
 vars.y <- c('TARGET_RESPSONSE')
 
-modelData2 <- noMissingTarget[ , vars]
-
+modelData2 <- modelData[ , vars]
 
 
 var_diagnostics <- function(data, xvars1, xvars2){
-    for(i in xvars1){
-      print(paste(i, 'contains', sum(is.na(data[,i])), 'empty values.'))
-    } #end inner for loop
-    
-    for(j in xvars2){
-      print(j)
-      print(table(data[,j]))
+  for(i in xvars1){
+    print(paste(i, 'contains', sum(is.na(data[,i])), 'empty values.'))
+  } #end inner for loop
+  
+  for(j in xvars2){
+    print(j)
+    print(table(data[,j]))
+  }
+  
+  for(p in xvars1){
+    for(q in xvars1){
+      cc <- cor(data[,p], data[,q], use='pairwise.complete.obs', method=c('pearson'))
+      if(cc > .8 & p != q){
+        print(paste(p, ' - ', q, ' = ', cc))
+      }
+      
     }
+  }
+  
 } #end function
 
 var_diagnostics(modelData2, vars.x.num, vars.x.nonum)
 
 
 scaled = scale(modelData2[, vars.x.num], center = TRUE)
+
 
 mahal <- mahalanobis(scaled[ , vars.x.num],
                      colMeans(scaled[ , vars.x.num], na.rm = TRUE),
@@ -263,7 +277,77 @@ cutoff <- qchisq(1-.001, length(vars.x.num))
 
 summary(mahal < cutoff)
 
+modelData3 <- cbind(as.data.frame(scaled), 
+                    as.data.frame(modelData2[, vars.x.nonum]))
+modelData3$TARGET_RESPONSE <- modelData2[, vars.y]
 
-nooutliers <- subset(scaled, mahal < cutoff)
+nooutliers <- as.data.frame(subset(modelData3, mahal < cutoff))
 
 
+
+
+train <- nooutliers[1:50000,] 
+test <- nooutliers[50001:93276,]
+
+
+form <- 'TARGET_RESPONSE ~ ORDERS_LT + AVG_DAYS_BTW_PURCH + AVG_TICKET_LT +
+         TIME_AS_CUSTOMER + SALES_12MO +
+        CORE_SALES_24MO + D200_SALES_24MO + D350_SALES_24MO + D400_SALES_24MO +
+        D450_SALES_24MO + PURCH_6MO + REWARDS + VISA'
+logmod <- glm(formula = form,
+              family = binomial(link='logit'),
+              data=train)
+summary(logmod)
+anova(logmod, test='Chisq')
+#plot(logmod)
+
+target <-c('TARGET_RESPONSE')
+finalvars <- c('ORDERS_LT','AVG_DAYS_BTW_PURCH','AVG_TICKET_LT', 'TIME_AS_CUSTOMER',
+'SALES_12MO','CORE_SALES_24MO', 'D200_SALES_24MO', 'D350_SALES_24MO',
+'D400_SALES_24MO','D450_SALES_24MO','PURCH_6MO','REWARDS', 'VISA')
+
+train$PURCH_6MO <- as.numeric(as.character(train$PURCH_6MO))
+train$REWARDS <- as.numeric(as.character(train$REWARDS))
+train$VISA <- as.numeric(as.character(train$VISA))
+train$TARGET_RESPONSE <- as.numeric(as.character(train$TARGET_RESPONSE))
+
+test$PURCH_6MO <- as.numeric(as.character(test$PURCH_6MO))
+test$REWARDS <- as.numeric(as.character(test$REWARDS))
+test$VISA <- as.numeric(as.character(test$VISA))
+test$as.numeric <- as.numeric(as.character(test$TARGET_RESPONSE))
+
+train.data <- as.matrix(train[,finalvars])
+train.label <- as.array(train[,target])
+
+test.data <- as.matrix(test[,finalvars])
+test.label <- as.array(test[,target])
+
+#----------------Advanced features --------------
+# to use advanced features, we need to put data in xgb.DMatrix
+dtrain <- xgb.DMatrix(data = train.data, label=train.label)
+dtest <- xgb.DMatrix(data = test.data, label=test.label)
+#---------------Using watchlist----------------
+# watchlist is a list of xgb.DMatrix, each of them is tagged with name
+watchlist <- list(train=dtrain, test=dtest)
+# to train with watchlist, use xgb.train, which contains more advanced features
+# watchlist allows us to monitor the evaluation result on all data in the list 
+print("Train xgboost using xgb.train with watchlist")
+bst <- xgb.train(data=dtrain, max_depth=length(finalvars), eta=0.3, nrounds=500, 
+                 subsample = 0.5, min_child_weight = 20,
+                 colsample_bytree = .7, watchlist=watchlist, eval_metric='error',
+                 nthread = 4, objective = "binary:logistic", early_stopping_rounds = 20)
+# Finally, you can check which features are the most important.
+print("Most important features (look at column Gain):")
+imp_matrix <- xgb.importance(feature_names = colnames(train.data), model = bst)
+print(imp_matrix)
+
+# Feature importance bar plot by gain
+print("Feature importance Plot : ")
+print(xgb.plot.importance(importance_matrix = imp_matrix))
+
+label = getinfo(dtest, "label")
+pred <- predict(bst, dtest)
+err <- as.numeric(sum(as.integer(pred > 0.5) != label))/length(label)
+print(paste("test-error=", err))
+
+confusionMatrix(pred, test.label)
