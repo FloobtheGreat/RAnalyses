@@ -3,6 +3,7 @@ require(nzr)
 require(xgboost)
 require(caTools)
 require(caret)
+require(pROC)
 
 
 
@@ -63,6 +64,7 @@ nzdata = nzQuery("SELECT HIST.*,
                  MAX(CASE WHEN DETAIL.VISA_STATUS = 'Y' THEN 'Y' ELSE 'N' END) AS VISA,
                  MIN(DETAIL.DATE_VALUE) AS FIRST_DATE,
                  MAX(DETAIL.DATE_VALUE) AS LAST_DATE,
+                 MAX(DETAIL.DATE_VALUE)-MIN(DETAIL.DATE_VALUE) AS TIME_AS_CUSTOMER,
                  COUNT(DISTINCT DETAIL.INBOUND_INTERACTION_KEY) AS ORDERS_LT,
                  (MAX(DETAIL.DATE_VALUE) - MIN(DETAIL.DATE_VALUE)) / NULLIF(COUNT(DISTINCT DETAIL.INBOUND_INTERACTION_KEY), 0)::DOUBLE AS AVG_DAYS_BTW_PURCH,
                  NVL(SUM(DETAIL.SALES)/NULLIF(COUNT(DISTINCT DETAIL.INBOUND_INTERACTION_KEY),0)::DOUBLE,0) AS AVG_TICKET_LT,
@@ -148,11 +150,11 @@ nzdata = nzQuery("SELECT HIST.*,
 
 nzDisconnect()
 
-#modelData <- nzdata
-#nzdata <- NULL
+modelData <- nzdata
+nzdata <- NULL
 
-modelData <- CHURNDATA
-CHURNDATA <- NULL
+#modelData <- CHURNDATA
+#CHURNDATA <- NULL
 
 modelData$LAST_NAME <- NULL
 modelData$ADDRESS_LINE_1 <- NULL
@@ -287,7 +289,7 @@ nooutliers <- as.data.frame(subset(modelData3, mahal < cutoff))
 
 
 train <- nooutliers[1:50000,] 
-test <- nooutliers[50001:93276,]
+test <- nooutliers[50001:93667,]
 
 
 form <- 'TARGET_RESPONSE ~ ORDERS_LT + AVG_DAYS_BTW_PURCH + AVG_TICKET_LT +
@@ -297,6 +299,10 @@ form <- 'TARGET_RESPONSE ~ ORDERS_LT + AVG_DAYS_BTW_PURCH + AVG_TICKET_LT +
 logmod <- glm(formula = form,
               family = binomial(link='logit'),
               data=train)
+
+save(logmod, file = "C:\\Users\\pairwin\\Documents\\GitHub\\RAnalyses\\CHURN_LOGISTIC.rda")
+
+
 summary(logmod)
 anova(logmod, test='Chisq')
 #plot(logmod)
@@ -314,7 +320,7 @@ train$TARGET_RESPONSE <- as.numeric(as.character(train$TARGET_RESPONSE))
 test$PURCH_6MO <- as.numeric(as.character(test$PURCH_6MO))
 test$REWARDS <- as.numeric(as.character(test$REWARDS))
 test$VISA <- as.numeric(as.character(test$VISA))
-test$as.numeric <- as.numeric(as.character(test$TARGET_RESPONSE))
+test$TARGET_RESPONSE <- as.numeric(as.character(test$TARGET_RESPONSE))
 
 train.data <- as.matrix(train[,finalvars])
 train.label <- as.array(train[,target])
@@ -332,10 +338,18 @@ watchlist <- list(train=dtrain, test=dtest)
 # to train with watchlist, use xgb.train, which contains more advanced features
 # watchlist allows us to monitor the evaluation result on all data in the list 
 print("Train xgboost using xgb.train with watchlist")
-bst <- xgb.train(data=dtrain, max_depth=length(finalvars), eta=0.3, nrounds=500, 
-                 subsample = 0.5, min_child_weight = 20,
-                 colsample_bytree = .7, watchlist=watchlist, eval_metric='error',
-                 nthread = 4, objective = "binary:logistic", early_stopping_rounds = 20)
+bst <- xgb.train(data=dtrain, 
+                 max_depth=length(finalvars), 
+                 eta=0.3, 
+                 nrounds=53, 
+                 subsample = 0.8, 
+                 min_child_weight = 5,
+                 colsample_bytree = .5, 
+                 watchlist=watchlist, 
+                 eval_metric = 'error',
+                 nthread = 8, 
+                 objective = "binary:logistic", 
+                 early_stopping_rounds = 53)
 # Finally, you can check which features are the most important.
 print("Most important features (look at column Gain):")
 imp_matrix <- xgb.importance(feature_names = colnames(train.data), model = bst)
@@ -350,4 +364,17 @@ pred <- predict(bst, dtest)
 err <- as.numeric(sum(as.integer(pred > 0.5) != label))/length(label)
 print(paste("test-error=", err))
 
-confusionMatrix(pred, test.label)
+predfactor <- factor(ifelse(pred >.5, 1,0), levels=c(1,0))
+
+confusionMatrix(predfactor, factor(test.label, levels=c(1,0)))
+
+rc <- roc(test.label, pred, plot=TRUE, smooth=TRUE)
+
+
+#-------------------save and load models-------------------------
+# save model to binary local file
+xgb.save(bst, 'C:\\Users\\pairwin\\Documents\\GitHub\\RAnalyses\\xgboost_churn.model')
+# load binary model to R
+bst2 <- xgb.load('C:\\Users\\pairwin\\Documents\\GitHub\\RAnalyses\\xgboost_churn.model')
+
+
