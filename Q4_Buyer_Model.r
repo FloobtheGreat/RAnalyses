@@ -1,0 +1,145 @@
+library(RODBC)
+library(pROC)
+library(caTools)
+library(ROSE)
+library(DMwR)
+
+
+ch <- odbcConnect("DBM_SANDBOX", believeNRows=FALSE)
+nzdata <- sqlQuery(ch, paste("SELECT *
+FROM BA_PROD..BADB_MODELFILE
+ORDER BY RANDOM()
+LIMIT 100000"))
+
+nzdata$TARGET_SALES <- NULL
+nzdata$CONT_ID <- NULL
+
+noMissingTarget <- nzdata[!is.na(nzdata$TARGET_Q4_PURCHASE), ]
+
+#columnList <- as.list(colnames(noMissingTarget))
+
+vars <- c('CUST_TYPE', 'BPS_OUTDOOR_REWARDS', 'BPS_PREFERRED_REWARDS', 'CAB_REWARDS', 'CAB_CLUB', 'NEW_CLUB', 'COMBINED_LOYALTY',
+          'COMBINED_CLUB', 'CHANNEL_TYPE', 'CHANNEL_TYPE_24MO', 'TOTAL_VISITS', 'TOTAL_BPS_VISITS', 'TOTAL_CAB_VISITS', 'TOTAL_VISITS_24MO',
+          'TIME_AS_CUSTOMER', 'AVG_DAYS_BTW_VISITS', 'DAYS_SINCE_LAST_PURCHASE', 'TOTAL_SALES', 'RETAIL_SALES', 'RETAIL_SALES_PROPORTION',
+          'TOTAL_UNITS', 'TOTAL_SALES_24MO', 'RETAIL_SALES_24MO', 'RETAIL_SALES_PROPORTION_24MO', 'TOTAL_UNITS_24MO', 'BPS_SALES_24MO',
+          'BPS_UNITS_24MO', 'CAB_SALES_24MO', 'CAB_UNITS_24MO', 'D100_SALES_24MO', 'D100_UNITS_24MO', 'D151_SALES_24MO', 'D151_UNITS_24MO',
+          'D175_SALES_24MO', 'D175_UNITS_24MO', 'D200_SALES_24MO', 'D200_UNITS_24MO', 'D300_SALES_24MO', 'D300_UNITS_24MO', 'D350_SALES_24MO',
+          'D350_UNITS_24MO', 'D400_SALES_24MO', 'D400_UNITS_24MO', 'D450_SALES_24MO', 'D450_UNITS_24MO', 'D475_SALES_24MO', 'D475_UNITS_24MO',
+          'D500_SALES_24MO', 'D500_UNITS_24MO', 'D600_SALES_24MO', 'D600_UNITS_24MO', 'D650_SALES_24MO', 'D650_UNITS_24MO', 'D675_SALES_24MO',
+          'D675_UNITS_24MO', 'D700_SALES_24MO', 'D700_UNITS_24MO', 'TOTAL_SALES_LYQTR', 'TOTAL_UNITS_LYQTR', 'BPS_SALES_LYQTR', 'BPS_UNITS_LYQTR',
+          'CAB_SALES_LYQTR', 'CAB_UNITS_LYQTR', 'D100_24MO_PROPORTION', 'D151_24MO_PROPORTION', 'D175_24MO_PROPORTION', 'D200_24MO_PROPORTION',
+          'D300_24MO_PROPORTION', 'D350_24MO_PROPORTION', 'D400_24MO_PROPORTION', 'D475_24MO_PROPORTION', 'D500_24MO_PROPORTION', 
+          'D600_24MO_PROPORTION', 'D650_24MO_PROPORTION', 'D675_24MO_PROPORTION', 'D700_24MO_PROPORTION','VISITS_BY_TIME_INTER',
+          'VISITS_BY_AVG_DAYS_INTER', 'VISITS_BY_DAYS_SINCE_INTER', 'VISITS_BY_LYQTY_UNITS_INTER', 'TIME_BY_AVG_DAYS_INTER',
+          'TIME_BY_DAYS_SINCE_LAST_INTER', 'TIME_BY_LYQTR_UNITS_INTER', 'TARGET_Q4_PURCHASE')
+
+
+
+
+
+
+
+
+vars.x.num <- c('TOTAL_VISITS', 'TOTAL_BPS_VISITS', 'TOTAL_CAB_VISITS', 'TOTAL_VISITS_24MO',
+                'TIME_AS_CUSTOMER', 'AVG_DAYS_BTW_VISITS', 'DAYS_SINCE_LAST_PURCHASE', 'TOTAL_SALES', 'RETAIL_SALES', 'RETAIL_SALES_PROPORTION',
+                'TOTAL_UNITS', 'TOTAL_SALES_24MO', 'RETAIL_SALES_24MO', 'RETAIL_SALES_PROPORTION_24MO', 'TOTAL_UNITS_24MO', 'BPS_SALES_24MO',
+                'BPS_UNITS_24MO', 'CAB_SALES_24MO', 'CAB_UNITS_24MO', 'D100_SALES_24MO', 'D100_UNITS_24MO', 'D151_SALES_24MO', 'D151_UNITS_24MO',
+                'D175_SALES_24MO', 'D175_UNITS_24MO', 'D200_SALES_24MO', 'D200_UNITS_24MO', 'D300_SALES_24MO', 'D300_UNITS_24MO', 'D350_SALES_24MO',
+                'D350_UNITS_24MO', 'D400_SALES_24MO', 'D400_UNITS_24MO', 'D450_SALES_24MO', 'D450_UNITS_24MO', 'D475_SALES_24MO', 'D475_UNITS_24MO',
+                'D500_SALES_24MO', 'D500_UNITS_24MO', 'D600_SALES_24MO', 'D600_UNITS_24MO', 'D650_SALES_24MO', 'D650_UNITS_24MO', 'D675_SALES_24MO',
+                'D675_UNITS_24MO', 'D700_SALES_24MO', 'D700_UNITS_24MO', 'TOTAL_SALES_LYQTR', 'TOTAL_UNITS_LYQTR', 'BPS_SALES_LYQTR', 'BPS_UNITS_LYQTR',
+                'CAB_SALES_LYQTR', 'CAB_UNITS_LYQTR', 'D100_24MO_PROPORTION', 'D151_24MO_PROPORTION', 'D175_24MO_PROPORTION', 'D200_24MO_PROPORTION',
+                'D300_24MO_PROPORTION', 'D350_24MO_PROPORTION', 'D400_24MO_PROPORTION', 'D475_24MO_PROPORTION', 'D500_24MO_PROPORTION', 
+                'D600_24MO_PROPORTION', 'D650_24MO_PROPORTION', 'D675_24MO_PROPORTION', 'D700_24MO_PROPORTION','VISITS_BY_TIME_INTER',
+                'VISITS_BY_AVG_DAYS_INTER', 'VISITS_BY_DAYS_SINCE_INTER', 'VISITS_BY_LYQTY_UNITS_INTER', 'TIME_BY_AVG_DAYS_INTER',
+                'TIME_BY_DAYS_SINCE_LAST_INTER', 'TIME_BY_LYQTR_UNITS_INTER')
+
+vars.x.nonum <- c('CUST_TYPE', 'BPS_OUTDOOR_REWARDS', 'BPS_PREFERRED_REWARDS', 'CAB_REWARDS', 'CAB_CLUB', 'NEW_CLUB', 'COMBINED_LOYALTY',
+                  'COMBINED_CLUB', 'CHANNEL_TYPE', 'CHANNEL_TYPE_24MO')
+
+vars.y <- c('TARGET_Q4_PURCHASE')
+
+modelData2 <- noMissingTarget[ , vars]
+
+scaled = scale(modelData2[, vars.x.num], center = TRUE)
+
+
+mahal <- mahalanobis(scaled[ , vars.x.num],
+                     colMeans(scaled[ , vars.x.num], na.rm = TRUE),
+                     cov(scaled[ , vars.x.num], 
+                         use = "pairwise.complete.obs"),
+                     tol=1e-20)
+
+cutoff <- qchisq(1-.01, length(vars.x.num))
+
+summary(mahal < cutoff)
+
+modelData3 <- cbind(as.data.frame(scaled), 
+                    as.data.frame(modelData2[, vars.x.nonum]))
+
+modelData3$TARGET_Q4_PURCHASE <- modelData2[, vars.y]
+
+nooutliers <- as.data.frame(subset(modelData3, mahal < cutoff))
+
+prop.table(table(nooutliers$TARGET_Q4_PURCHASE))
+
+set.seed(12345)
+split = sample.split(nooutliers$TARGET_Q4_PURCHASE, SplitRatio = 0.5)
+
+train <- subset(nooutliers, split==TRUE)
+test <- subset(nooutliers, split==FALSE)
+
+train_bal <- ovun.sample(TARGET_Q4_PURCHASE ~ ., data= train, method='over', p=0.5)$data
+
+
+#form <- 'TARGET_Q4_PURCHASE ~ TOTAL_VISITS + TOTAL_BPS_VISITS + TOTAL_CAB_VISITS + TOTAL_VISITS_24MO +
+#         TIME_AS_CUSTOMER + AVG_DAYS_BTW_VISITS + DAYS_SINCE_LAST_PURCHASE + TOTAL_UNITS + TOTAL_SALES_24MO +
+#         TOTAL_UNITS_24MO + BPS_SALES_24MO + D100_UNITS_24MO + D151_UNITS_24MO + D200_UNITS_24MO + 
+#         D450_UNITS_24MO + D475_UNITS_24MO + D500_UNITS_24MO + D675_SALES_24MO + D700_SALES_24MO +
+#         D700_UNITS_24MO + TOTAL_SALES_LYQTR + TOTAL_UNITS_LYQTR + D350_24MO_PROPORTION + D475_24MO_PROPORTION +
+#         D600_24MO_PROPORTION + D650_24MO_PROPORTION + CUST_TYPE + NEW_CLUB + CHANNEL_TYPE'
+
+form <- 'TARGET_Q4_PURCHASE ~ TOTAL_VISITS_24MO +
+         TIME_AS_CUSTOMER + AVG_DAYS_BTW_VISITS + DAYS_SINCE_LAST_PURCHASE + TOTAL_UNITS + TOTAL_SALES_24MO +
+         TOTAL_UNITS_24MO + BPS_SALES_24MO + D100_UNITS_24MO + D151_UNITS_24MO + D200_UNITS_24MO + 
+         D450_UNITS_24MO + D475_UNITS_24MO + D500_UNITS_24MO + D675_SALES_24MO + D700_SALES_24MO +
+         D700_UNITS_24MO + TOTAL_SALES_LYQTR + TOTAL_UNITS_LYQTR + D350_24MO_PROPORTION + D475_24MO_PROPORTION +
+         D600_24MO_PROPORTION + D650_24MO_PROPORTION + VISITS_BY_TIME_INTER + VISITS_BY_AVG_DAYS_INTER + 
+         VISITS_BY_DAYS_SINCE_INTER + VISITS_BY_LYQTY_UNITS_INTER + TIME_BY_AVG_DAYS_INTER + 
+         TIME_BY_DAYS_SINCE_LAST_INTER + TIME_BY_LYQTR_UNITS_INTER + CUST_TYPE + NEW_CLUB + CHANNEL_TYPE'
+logmod <- glm(formula = form,
+              family = binomial(link = 'logit'),
+              data=train_bal)
+
+#save(logmod, file = "C:\\Users\\pairwin\\Documents\\GitHub\\RAnalyses\\CHURN_LOGISTIC.rda")
+
+
+
+summary(logmod)
+anova(logmod, test='Chisq')
+car::vif(logmod)
+
+#plot(logmod)
+
+
+prob=predict(logmod, test, type=c("response"))
+
+test$prob=prob
+hist(test$prob)
+
+accuracy.meas(response = test$TARGET_Q4_PURCHASE, predicted= test$prob)
+roc.curve(test$TARGET_Q4_PURCHASE, test$prob, plotit = TRUE)
+
+g <- roc(TARGET_Q4_PURCHASE ~ prob, data = test, auc=TRUE)
+plot(g)  
+
+auc(g)
+
+coords(g, x="best", ret=c("threshold","auc"))
+
+test$prediction=ifelse(prob>=0.4205224,1,0)
+
+
+
+caret::confusionMatrix(factor(test$prediction), factor(test$TARGET_Q4_PURCHASE), positive='1')
+
